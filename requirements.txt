@@ -1,0 +1,10 @@
+flask>=3.0.0
+werkzeug>=3.0.0
+numpy
+networkx
+matplotlib
+Pillow
+scikit-image
+scikit-learn
+scipy
+
