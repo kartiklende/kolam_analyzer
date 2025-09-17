@@ -1954,11 +1954,9 @@
 
         // Initialize everything when DOM is loaded
         document.addEventListener('DOMContentLoaded', () => {
-            // Initialize pill navigation
-            pillNavigation.init();
-
-            // Initialize prism background
-            initPrismBackground();
+            try { pillNavigation.init(); } catch (e) { console.error(e); }
+            // Initialize prism background if available
+            try { if (typeof initPrismBackground === 'function') { initPrismBackground(); } } catch (e) { console.warn('Prism init skipped'); }
         });
 
         // Enhanced smooth scrolling for all anchor links
@@ -2127,16 +2125,14 @@
                 // Download JSON via fetch blob to avoid navigation
                 const jsonBtn = document.getElementById('downloadJsonBtn');
                 if (jsonBtn) {
+                    const capturedJsonPath = jsonPath;
                     jsonBtn.addEventListener('click', async () => {
                         const original = jsonBtn.textContent;
                         jsonBtn.disabled = true;
                         jsonBtn.textContent = 'Preparing…';
                         try {
-                            if (!${!!'jsonPath'}.toString()) {
-                                // no-op if missing
-                                return;
-                            }
-                            const res = await fetch(BACKEND_URL + '/download?path=' + encodeURIComponent('${jsonPath}'));
+                            if (!capturedJsonPath) { throw new Error('No JSON available. Analyze first.'); }
+                            const res = await fetch(BACKEND_URL + '/download?path=' + encodeURIComponent(capturedJsonPath));
                             if (!res.ok) throw new Error('Failed to fetch JSON');
                             const blob = await res.blob();
                             const url = URL.createObjectURL(blob);
