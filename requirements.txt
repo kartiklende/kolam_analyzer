@@ -7,4 +7,6 @@ Pillow
 scikit-image
 scikit-learn
 scipy
+flask-cors
+gunicorn
 

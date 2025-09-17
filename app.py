@@ -2,11 +2,13 @@ import os
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from werkzeug.utils import secure_filename
 import numpy as np
+from flask_cors import CORS
 
 # Import the existing processor
 from kolam_gen import EnhancedKolamProcessor
 
 app = Flask(__name__, static_folder='.', static_url_path='')
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Ensure input/output dirs exist (the processor also does this)
 os.makedirs('data/input_images', exist_ok=True)
