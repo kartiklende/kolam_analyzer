@@ -82,6 +82,11 @@ def analyze():
     return jsonify(_to_serializable(results))
 
 
+@app.route('/health')
+def health():
+    return 'ok', 200
+
+
 def _safe_output_path(path_param: str) -> str:
     """Ensure the requested path stays within data/output_results."""
     base = os.path.abspath('data/output_results')
