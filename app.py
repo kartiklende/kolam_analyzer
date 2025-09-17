@@ -1,7 +1,9 @@
 import os
+import gc
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from werkzeug.utils import secure_filename
 import numpy as np
+from PIL import Image
 from flask_cors import CORS
 
 # Import the existing processor
@@ -13,8 +15,6 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # Ensure input/output dirs exist (the processor also does this)
 os.makedirs('data/input_images', exist_ok=True)
 os.makedirs('data/output_results', exist_ok=True)
-
-processor = EnhancedKolamProcessor()
 
 
 @app.route('/')
@@ -36,15 +36,35 @@ def analyze():
     save_path = os.path.join('data/input_images', filename)
     file.save(save_path)
 
-    # Run analysis
+    # Downscale large images to save memory/CPU
+    try:
+        with Image.open(save_path) as img:
+            img = img.convert('RGB')
+            max_side = 1280
+            if max(img.size) > max_side:
+                img.thumbnail((max_side, max_side))
+                img.save(save_path, format='JPEG', quality=90)
+    except Exception:
+        pass
+
+    # Run analysis with per-request processor to allow GC
+    processor = EnhancedKolamProcessor()
     results = processor.analyze_kolam_from_image(save_path)
 
     # Optionally save visualization and include path
-    try:
-        fig = processor.create_comprehensive_visualization()
-    except Exception:
-        # Visualization is optional; ignore errors
-        pass
+    # Optional visualization (costly). Enable by /analyze?viz=1
+    generate_viz = request.args.get('viz') == '1'
+    if generate_viz:
+        try:
+            fig = processor.create_comprehensive_visualization()
+            try:
+                import matplotlib.pyplot as plt
+                plt.close(fig)
+            except Exception:
+                pass
+        except Exception:
+            # Visualization is optional; ignore errors
+            pass
 
     # Create JSON export and collect latest artifacts
     output_dir = 'data/output_results'
@@ -79,7 +99,18 @@ def analyze():
             results['metadata']['results_json'] = to_rel_url_path(latest_json)
 
     # Ensure JSON serializable payload
-    return jsonify(_to_serializable(results))
+    response = jsonify(_to_serializable(results))
+
+    # Free memory aggressively
+    try:
+        processor.original_image = None
+        processor.processed_image = None
+    except Exception:
+        pass
+    del processor
+    gc.collect()
+
+    return response
 
 
 @app.route('/health')
