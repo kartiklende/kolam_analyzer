@@ -21,7 +21,7 @@ os.makedirs('data/output_results', exist_ok=True)
 @app.route('/')
 def index():
     # Serve the UI file
-    return send_from_directory(app.static_folder, 'ui.html')
+    return send_from_directory(app.static_folder, 'index.html')
 
 
 @app.route('/analyze', methods=['POST'])
@@ -100,20 +100,6 @@ def analyze():
 
     # Ensure JSON serializable payload
     response = jsonify(_to_serializable(results))
-<<<<<<< HEAD
-=======
-
-    # Free memory aggressively
-    try:
-        processor.original_image = None
-        processor.processed_image = None
-    except Exception:
-        pass
-    del processor
-    gc.collect()
-
-    return response
->>>>>>> c6ca2de73d3b57198804e472123e687b6960e846
 
     # Free memory aggressively
     try:
