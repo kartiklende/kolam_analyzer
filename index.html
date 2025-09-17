@@ -1501,6 +1501,8 @@
     </footer>
 
     <script>
+        const BACKEND_URL = 'https://kolam-analyzer.onrender.com';
+        let LAST_UPLOAD_FILE = null;
         // Enhanced PillNav functionality
         const pillNavigation = {
             circleRefs: [],
@@ -2005,6 +2007,7 @@
         document.getElementById('fileInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
+            LAST_UPLOAD_FILE = file;
 
             const resultsDiv = document.getElementById('analysisResults');
             resultsDiv.innerHTML = `
@@ -2018,7 +2021,7 @@
                 const formData = new FormData();
                 formData.append('image', file);
 
-                const response = await fetch('https://kolam-analyzer.onrender.com/analyze', {
+                const response = await fetch(BACKEND_URL + '/analyze', {
                     method: 'POST',
                     body: formData
                 });
@@ -2079,11 +2082,79 @@
                         </div>
 
                         <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top: 16px;">
-                            ${vizPath ? `<a class=\"btn-secondary\" href=\"https://kolam-analyzer.onrender.com/download?path=${encodeURIComponent(vizPath)}\" target=\"_blank\" rel=\"noopener\">Download Visualization (PNG)</a>` : ''}
-                            ${jsonPath ? `<a class=\"btn-secondary\" href=\"https://kolam-analyzer.onrender.com/download?path=${encodeURIComponent(jsonPath)}\" target=\"_blank\" rel=\"noopener\">Download Analysis (JSON)</a>` : ''}
+                            <button class="btn-secondary" id="downloadVizBtn" type="button">Download Visualization (PNG)</button>
+                            <button class="btn-secondary" id="downloadJsonBtn" type="button" ${jsonPath ? '' : 'disabled'}>Download Analysis (JSON)</button>
                         </div>
                     </div>
                 `;
+
+                // Generate visualization on-demand when button clicked
+                const vizBtn = document.getElementById('downloadVizBtn');
+                if (vizBtn) {
+                    vizBtn.addEventListener('click', async () => {
+                        if (!LAST_UPLOAD_FILE) {
+                            alert('Please upload an image first.');
+                            return;
+                        }
+                        const originalText = vizBtn.textContent;
+                        vizBtn.disabled = true;
+                        vizBtn.textContent = 'Generating…';
+                        try {
+                            const fd = new FormData();
+                            fd.append('image', LAST_UPLOAD_FILE);
+                            const res = await fetch(BACKEND_URL + '/analyze?viz=1', { method: 'POST', body: fd });
+                            if (!res.ok) {
+                                const err = await res.json().catch(() => ({}));
+                                throw new Error(err.error_message || ('HTTP ' + res.status));
+                            }
+                            const data2 = await res.json();
+                            const viz2 = data2 && data2.metadata && data2.metadata.visualization_image;
+                            if (viz2) {
+                                const url = BACKEND_URL + '/download?path=' + encodeURIComponent(viz2);
+                                window.open(url, '_blank');
+                            } else {
+                                alert('Visualization not available. Please try again.');
+                            }
+                        } catch (err) {
+                            alert((err && err.message) || 'Failed to generate visualization.');
+                        } finally {
+                            vizBtn.textContent = originalText;
+                            vizBtn.disabled = false;
+                        }
+                    });
+                }
+
+                // Download JSON via fetch blob to avoid navigation
+                const jsonBtn = document.getElementById('downloadJsonBtn');
+                if (jsonBtn) {
+                    jsonBtn.addEventListener('click', async () => {
+                        const original = jsonBtn.textContent;
+                        jsonBtn.disabled = true;
+                        jsonBtn.textContent = 'Preparing…';
+                        try {
+                            if (!${!!'jsonPath'}.toString()) {
+                                // no-op if missing
+                                return;
+                            }
+                            const res = await fetch(BACKEND_URL + '/download?path=' + encodeURIComponent('${jsonPath}'));
+                            if (!res.ok) throw new Error('Failed to fetch JSON');
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'enhanced_kolam_analysis.json';
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(url);
+                        } catch (e) {
+                            alert((e && e.message) || 'Could not download JSON.');
+                        } finally {
+                            jsonBtn.textContent = original;
+                            jsonBtn.disabled = false;
+                        }
+                    });
+                }
             } catch (err) {
                 resultsDiv.innerHTML = `
                     <div style="text-align: center;">

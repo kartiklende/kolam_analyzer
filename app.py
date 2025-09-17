@@ -1,5 +1,6 @@
 import os
 import gc
+import uuid
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from werkzeug.utils import secure_filename
 import numpy as np
@@ -52,11 +53,18 @@ def analyze():
     results = processor.analyze_kolam_from_image(save_path)
 
     # Optionally save visualization and include path
+    # Prepare unique IDs/paths for outputs
+    uid = uuid.uuid4().hex[:12]
+    output_dir = 'data/output_results'
+    os.makedirs(output_dir, exist_ok=True)
+    viz_out_path = os.path.join(output_dir, f'kolam_analysis_{uid}.png')
+    json_out_path = os.path.join(output_dir, f'enhanced_kolam_analysis_{uid}.json')
+
     # Optional visualization (costly). Enable by /analyze?viz=1
     generate_viz = request.args.get('viz') == '1'
     if generate_viz:
         try:
-            fig = processor.create_comprehensive_visualization()
+            fig = processor.create_comprehensive_visualization(save_path=viz_out_path)
             try:
                 import matplotlib.pyplot as plt
                 plt.close(fig)
@@ -67,21 +75,13 @@ def analyze():
             pass
 
     # Create JSON export and collect latest artifacts
-    output_dir = 'data/output_results'
-    latest_png = ''
+    latest_png = viz_out_path if generate_viz and os.path.exists(viz_out_path) else ''
     latest_json = ''
     try:
-        # Export results JSON
-        json_path = processor.export_results()
-        # Find latest PNG
-        pngs = [
-            os.path.join(output_dir, f) for f in os.listdir(output_dir)
-            if f.lower().endswith('.png')
-        ]
-        latest_png = max(pngs, key=os.path.getmtime) if pngs else ''
+        # Export results JSON to deterministic path for this request
+        json_path = processor.export_results(json_out_path)
         latest_json = json_path if json_path else ''
     except Exception:
-        latest_png = ''
         latest_json = ''
 
     # Normalize to URL-friendly relative paths
@@ -100,6 +100,8 @@ def analyze():
 
     # Ensure JSON serializable payload
     response = jsonify(_to_serializable(results))
+<<<<<<< HEAD
+=======
 
     # Free memory aggressively
     try:
@@ -111,11 +113,18 @@ def analyze():
     gc.collect()
 
     return response
+>>>>>>> c6ca2de73d3b57198804e472123e687b6960e846
 
+    # Free memory aggressively
+    try:
+        processor.original_image = None
+        processor.processed_image = None
+    except Exception:
+        pass
+    del processor
+    gc.collect()
 
-@app.route('/health')
-def health():
-    return 'ok', 200
+    return response
 
 
 def _safe_output_path(path_param: str) -> str:
@@ -134,7 +143,11 @@ def download_file():
         return jsonify({'error': True, 'error_message': 'Missing path parameter'}), 400
     try:
         target = _safe_output_path(path_param)
-        return send_file(target, as_attachment=True)
+        resp = send_file(target, as_attachment=True)
+        # Expose filename header to browsers (for JS-triggered downloads across origins)
+        resp.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
     except Exception as e:
         return jsonify({'error': True, 'error_message': str(e)}), 400
 
